@@ -10,6 +10,17 @@
   API Keys are stored as environment variables: `export GMAPS_APIKEY="..."`
 """
 
+# Features to add:
+#  * anytime someone mentions a country name, give back a map of that country
+#      using some static maps api
+#  * give time to rain
+#  * commute summary:
+#    * the commute weather in the newyorkoffice channel
+#    * suggested reading (NYTimes trending articles? Instapaper trends?)
+#  * lunch suggester:
+#     * using the Yelp API:
+#         https://www.yelp.com/developers/documentation/v3/business_search
+
 import os
 import time as t
 from slackclient import SlackClient
@@ -210,7 +221,10 @@ def handle_command(command, channel):
         # format: weather place name
         if 'evening commute' in command:
             response = "*Your evening commute weather!*\n\n"
-            response += get_weather('brooklyn, new york')
+            if 'nyc' in command:
+                response += get_weather('brooklyn, new york')
+            elif 'denver' in command:
+                response += get_weather('denver, colorado')
         else:
             response = get_weather(command.split('weather')[1].strip())
     elif command.startswith('xkcd'):
@@ -272,7 +286,8 @@ if __name__ == "__main__":
             elif now_time > time(16, 45) and not told_weather:
                 # print evening commute weather in #research channel
                 # TODO: change this to #newyorkoffice
-                handle_command('weather evening commute', 'C0AF8Q25N')
+                handle_command('weather evening commute nyc', 'C0AF8Q25N')
+                hanlde_command('weather evening commute denver', 'C0AF8Q25N')
                 # TODO: give special warning if it is going to rain on the
                 #        commute home
                 told_weather = True
