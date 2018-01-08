@@ -27,13 +27,18 @@ from slackclient import SlackClient
 import requests
 from datetime import datetime, time
 
-# andy_bot's ID as an environment variable
+# andybot's ID from the environment
 BOT_ID = os.environ.get("BOT_ID")
 
 # constants
 # TODO: make this more robust to interactions with people
-AT_BOT = "<@" + BOT_ID + ">:"
+AT_BOT = "<@{}>".format(BOT_ID)
 EXAMPLE_COMMAND = "do"
+
+# advice
+ADVICE = ('go for a bike ride', 'eat more kale', 'go climbing',
+          'write a poem', 'laugh so hard your face hurts',
+          'plan a hiking trip')
 
 # current commands
 #  prints in help with format: usage: ..., example: ..., output: ...
@@ -68,11 +73,31 @@ def kelvin_to_fahrenheit(temp):
 # commands available through andy_bot
 
 
+def get_wunderground(location):
+    """
+        location is a lat/long pair: lat = location[0], lng = location[1]
+    """
+
+    wu_apikey = os.environ.get('WU_APIKEY')
+    wu_template = ''
+
+    try:
+        resp = requests.get()
+    except Exception as err:
+        print('Trouble getting the weather: %s' % err)
+
+    resp.json()['current_observation']['weather']
+
+    return ''
+
+
 def get_weather(location):
     """
       'weather'
       Returns the weather at the location requested
     """
+    import random
+
     if location == '' or location is None:
         return 'Specify a place for weather: `weather manila, philippines`'
 
@@ -108,10 +133,16 @@ def get_weather(location):
 
     if fill['temp'] < 45:
         description += "Wear something really warm!"
-    elif fill['temp'] < 60 and fill['temp'] >= 45:
+    elif (fill['temp'] < 60) and (fill['temp'] >= 45):
         description += "Take a sweater!"
     else:
-        description += "Enjoy!"
+        description += "Enjoy and go for a bike ride!"
+
+    if 'rain' in fill['condition'].lower():
+        description += " *Wear your rain coat!*"
+
+    random_advice = random.randint(0, len(ADVICE)-1)
+    description += ("\nandybot advice: _%s_" % ADVICE[random_advice])
 
     return description
 
@@ -143,14 +174,34 @@ def get_xkcd(latest=False):
     return response.format(**resp.json())
 
 
-def say_greeting(command):
+def get_map_preview(latlng):
+    """
+        show map at coordinates latlng
+    """
+    name = 'andybot_preview'
+    point = '{\"point\":\"POINT(%(lng)s+%(lat)s)\"}' % {'lat': str(latlng[0]),
+                                                        'lng': str(latlng[1])}
+    static_map = ('http://eschbacher.carto.com/api/v1/map/static/named/'
+                  '{name}/450/450.png'
+                  '?lat={lat}&lon={lng}&zoom=14'
+                  '&config={point}'
+                  ).format(name=name, lat=latlng[0], lng=latlng[1],
+                           point=point)
+
+    return static_map
+
+
+def say_greeting(cmd):
     import random
     responses = ('hello!', 'hi!', 'howdy!', 'hey!', 'aloha!')
-    if 'hello' in command or 'hi' in command:
-        r_number = iandom.randint(len(responses))
+
+    if ('hello' in cmd) or ('hi' in cmd):
+        r_number = random.randint(0, len(responses) - 1)
         response = responses[r_number]
-    elif 'morning' in command:
+    elif 'morning' in cmd:
         response = 'Good morning lovely human! Make some great maps today.'
+    else:
+        response = "grumble grumble"
 
     return response
 
@@ -161,8 +212,8 @@ def get_latlng(location):
         get the latlng of a given place
     """
 
-    api_template = "https://maps.googleapis.com/maps/api/geocode/json" \
-                   "?address={location}&key={apikey}"
+    api_template = ("https://maps.googleapis.com/maps/api/geocode/json"
+                    "?address={location}&key={apikey}")
 
     try:
         fill = {'location': location,
@@ -178,8 +229,11 @@ def get_latlng(location):
     fill['lat'] = resp.json()['results'][0]['geometry']['location']['lat']
     fill['lng'] = resp.json()['results'][0]['geometry']['location']['lng']
     fill['location'] = resp.json()['results'][0]['formatted_address']
+    fill['image'] = get_map_preview([fill['lat'], fill['lng']])
 
-    return '*{lat},{lng}* is the lat/lng of of *{location}*.'.format(**fill)
+    template = '*{lat},{lng}* is the lat/lng of *{location}*.\n{image}'
+
+    return template.format(**fill)
 
 
 def get_help():
@@ -221,10 +275,10 @@ def handle_command(command, channel):
         # format: weather place name
         if 'evening commute' in command:
             response = "*Your evening commute weather!*\n\n"
-            if 'nyc' in command:
-                response += get_weather('brooklyn, new york')
-            elif 'denver' in command:
-                response += get_weather('denver, colorado')
+            response += get_weather('new york')
+            response += "\n\n"
+            response += "@mamata *your evening commute weather!*\n\n"
+            response += get_weather('denver, colorado')
         else:
             response = get_weather(command.split('weather')[1].strip())
     elif command.startswith('xkcd'):
@@ -275,7 +329,7 @@ def parse_slack_output(slack_rtm_output):
 if __name__ == "__main__":
     READ_WEBSOCKET_DELAY = 1  # 1 second delay between reading from firehose
     if slack_client.rtm_connect():
-        print("StarterBot connected and running!")
+        print("andybot connected and running :)")
         told_weather = False
         while True:
             command, channel = parse_slack_output(slack_client.rtm_read())
@@ -283,11 +337,11 @@ if __name__ == "__main__":
             if command and channel:
                 print('command', command, 'channel', channel)
                 handle_command(command, channel)
-            elif now_time > time(16, 45) and not told_weather:
+            elif now_time > time(16, 48) and not told_weather:
                 # print evening commute weather in #research channel
                 # TODO: change this to #newyorkoffice
-                handle_command('weather evening commute nyc', 'C0AF8Q25N')
-                hanlde_command('weather evening commute denver', 'C0AF8Q25N')
+                # handle_command('weather evening commute nyc', 'C0AF8Q25N')
+                handle_command('weather evening commute denver', 'C0AF8Q25N')
                 # TODO: give special warning if it is going to rain on the
                 #        commute home
                 told_weather = True
